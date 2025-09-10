@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * @import {Enemy, Bullet, World, Action} from "./bot.d.ts"
+ * @import {Enemy, Self, Bullet, World, Action} from "./bot.d.ts"
  */
 
 /**
@@ -15,6 +15,15 @@ const getBotRange = (bot) => {
 };
 
 const BOT_WIDTH = 45;
+/**
+ * @type {undefined | Enemy}
+ */
+let lastEnemyStats;
+
+/**
+ * @type {number | undefined | null}
+ */
+let lookingTowardAngle;
 
 /*
  * ===================================================================
@@ -40,85 +49,114 @@ bots.push({
     const action = {
       moveDirection: null,
     };
-
-    // =============================================================
-    //                    STRATEGY IMPLEMENTATION
-    // =============================================================
-
-    // Check for incoming bullets
-    /**
-     * @type {{ bullet: Bullet, distance: number} | undefined}
-     */
-    let dangerousBullet;
-
-    world.bullets.forEach((bullet) => {
-      const distance = world.getDistanceToTarget(bullet.x, bullet.y);
-
-      const bulletTotalDistance = bullet.traveledDistance + distance;
-      const botRange = getBotRange(world.enemies[0]);
-
-      if (bulletTotalDistance > botRange) {
-        return;
+    try {
+      if (!world.enemies.length) {
+        return action;
       }
 
-      const dx = bullet.x - world.self.x;
-      const dy = bullet.y - world.self.y;
+      const enemy = world.enemies[0];
 
-      // Check if bullet is heading towards us
-      const bulletAngle = Math.atan2(-bullet.vy, -bullet.vx);
-      const angleToUs = Math.atan2(dy, dx);
-      const angleDiff = Math.abs(bulletAngle - angleToUs);
+      // =============================================================
+      //                    STRATEGY IMPLEMENTATION
+      // =============================================================
 
-      if (angleDiff > 0.5) {
-        return;
-      }
+      // Check for incoming bullets
+      /**
+       * @type {{ bullet: Bullet, distance: number} | undefined}
+       */
+      let dangerousBullet;
 
-      dangerousBullet = { bullet, distance };
-    });
+      world.bullets.forEach((bullet) => {
+        const distance = world.getDistanceToTarget(bullet.x, bullet.y);
 
-    if (dangerousBullet) {
-      if (world.self.canShield) {
-        // Block at the last second
-        if (
-          dangerousBullet.distance - dangerousBullet.bullet.speed <
-          BOT_WIDTH
-        ) {
-          action.shield = true;
-          return action;
+        const bulletTotalDistance = bullet.traveledDistance + distance;
+        const botRange = getBotRange(world.enemies[0]);
+
+        if (bulletTotalDistance > botRange) {
+          return;
+        }
+
+        const dx = bullet.x - world.self.x;
+        const dy = bullet.y - world.self.y;
+
+        // Check if bullet is heading towards us
+        const bulletAngle = Math.atan2(-bullet.vy, -bullet.vx);
+        const angleToUs = Math.atan2(dy, dx);
+        const angleDiff = Math.abs(bulletAngle - angleToUs);
+
+        if (angleDiff > 0.5) {
+          return;
+        }
+
+        dangerousBullet = { bullet, distance };
+      });
+
+      if (dangerousBullet) {
+        if (world.self.canShield) {
+          // Block at the last second
+          if (
+            dangerousBullet.distance - dangerousBullet.bullet.speed <
+            BOT_WIDTH
+          ) {
+            action.shield = true;
+            return action;
+          }
+        } else {
+          if (
+            dangerousBullet.distance >
+            BOT_WIDTH + world.self.stats.speed / 2 - dangerousBullet.distance
+          ) {
+            // Dodge perpendicular to bullet
+            const dodgeAngle =
+              Math.atan2(dangerousBullet.bullet.vy, dangerousBullet.bullet.vx) +
+              Math.PI / 2;
+            action.moveDirection = dodgeAngle;
+            return action;
+          }
         }
       }
-      // Dodge perpendicular to bullet
-      // const bullet = dangerousBullets[0];
-      // const dodgeAngle = Math.atan2(bullet.vy, bullet.vx) + Math.PI / 2;
-      // action.moveDirection = dodgeAngle;
-    }
-
-    if (world.enemies.length > 0) {
-      // Attack when safe
-      const enemy = world.enemies[0];
 
       // Use the getDistanceToTarget helper method
       const distance = world.getDistanceToTarget(enemy.x, enemy.y);
 
       // Keep optimal distance
-      if (distance > world.self.range * 0.8) {
+      if (distance > world.self.range) {
         action.moveDirection = world.directionTo(enemy.x, enemy.y);
-      } else if (distance < world.self.range * 0.3) {
-        // Move away from enemy using directionAwayFrom helper
-        // action.moveDirection = world.directionAwayFrom(enemy.x, enemy.y);
-      } else {
-        // action.moveDirection;
+        return action;
       }
 
       // Shoot if we can using shootAt helper
       if (world.self.canShoot && distance <= world.self.range) {
-        action.shoot = world.shootAt(enemy.x, enemy.y);
+        if (!lastEnemyStats) {
+          action.shoot = world.shootAt(enemy.x, enemy.y);
+          return action;
+        }
+        // Shoot where the enemy will be (assuming they continued their path)
+        const enemyVx = enemy.x - lastEnemyStats.x;
+        const enemyVy = enemy.y - lastEnemyStats.y;
+        action.shoot = world.shootAt(enemy.x + enemyVx, enemy.y + enemyVy);
+        return action;
+      }
+
+      // =============================================================
+      //                    RETURN YOUR ACTION
+      // =============================================================
+      return action;
+    } finally {
+      lastEnemyStats = world.enemies[0];
+
+      if (action.moveDirection != null) {
+        lookingTowardAngle = action.moveDirection;
+      }
+
+      if (action.shoot != null && lookingTowardAngle != null) {
+        const diffAngle = (lookingTowardAngle - action.shoot) % (Math.PI * 2);
+        if (diffAngle >= Math.PI / 2 || diffAngle <= -Math.PI / 2) {
+          action.moveDirection = action.shoot;
+          lookingTowardAngle = action.moveDirection;
+          delete action.shoot;
+        }
       }
     }
-
-    // =============================================================
-    //                    RETURN YOUR ACTION
-    // =============================================================
-    return action;
   },
 });

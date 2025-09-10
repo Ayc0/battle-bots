@@ -35,17 +35,19 @@ type Map = {
   y: number; //   Arena top edge
 };
 
+export type Self = {
+  x: number;
+  y: number;
+  hp: number;
+  canShoot: boolean;
+  canShield: boolean;
+  shootingState: string;
+  stats: Stat;
+  range: number; // Actual shooting range in pixels
+};
+
 export type World = {
-  self: {
-    x: number;
-    y: number;
-    hp: number;
-    canShoot: boolean;
-    canShield: boolean;
-    shootingState: string;
-    stats: Stat;
-    range: number; // Actual shooting range in pixels
-  };
+  self: Self;
 
   enemies: Enemy[];
 
