@@ -1,8 +1,20 @@
 // @ts-check
 
 /**
- * @import {World, Action} from "./bot.d.ts"
+ * @import {Enemy, Bullet, World, Action} from "./bot.d.ts"
  */
+
+/**
+ * @param {Enemy} bot
+ * @returns number
+ */
+const getBotRange = (bot) => {
+  const baseRange = 150;
+  const rangeMultiplier = 75;
+  return baseRange + (bot.stats?.range || 1) * rangeMultiplier;
+};
+
+const BOT_WIDTH = 45;
 
 /*
  * ===================================================================
@@ -34,51 +46,68 @@ bots.push({
     // =============================================================
 
     // Check for incoming bullets
-    const dangerousBullets = world.bullets.filter((bullet) => {
+    /**
+     * @type {{ bullet: Bullet, distance: number} | undefined}
+     */
+    let dangerousBullet;
+
+    world.bullets.forEach((bullet) => {
+      const distance = world.getDistanceToTarget(bullet.x, bullet.y);
+
+      const bulletTotalDistance = bullet.traveledDistance + distance;
+      const botRange = getBotRange(world.enemies[0]);
+
+      if (bulletTotalDistance > botRange) {
+        return;
+      }
+
       const dx = bullet.x - world.self.x;
       const dy = bullet.y - world.self.y;
 
-      // Use the getDistanceToTarget helper method
-      const distance = world.getDistanceToTarget(bullet.x, bullet.y);
-
       // Check if bullet is heading towards us
-      const bulletAngle = Math.atan2(bullet.vy, bullet.vx);
+      const bulletAngle = Math.atan2(-bullet.vy, -bullet.vx);
       const angleToUs = Math.atan2(dy, dx);
       const angleDiff = Math.abs(bulletAngle - angleToUs);
 
-      return distance < 120 && angleDiff < 0.5;
+      if (angleDiff > 0.5) {
+        return;
+      }
+
+      dangerousBullet = { bullet, distance };
     });
 
-    if (dangerousBullets.length > 0) {
+    if (dangerousBullet) {
       if (world.self.canShield) {
-        // Use shield if available
-        action.shield = true;
-      } else {
-        // Dodge perpendicular to bullet
-        const bullet = dangerousBullets[0];
-        const dodgeAngle = Math.atan2(bullet.vy, bullet.vx) + Math.PI / 2;
-        action.moveDirection = dodgeAngle;
+        // Block at the last second
+        if (
+          dangerousBullet.distance - dangerousBullet.bullet.speed <
+          BOT_WIDTH
+        ) {
+          action.shield = true;
+          return action;
+        }
       }
-    } else if (world.enemies.length > 0) {
+      // Dodge perpendicular to bullet
+      // const bullet = dangerousBullets[0];
+      // const dodgeAngle = Math.atan2(bullet.vy, bullet.vx) + Math.PI / 2;
+      // action.moveDirection = dodgeAngle;
+    }
+
+    if (world.enemies.length > 0) {
       // Attack when safe
       const enemy = world.enemies[0];
 
       // Use the getDistanceToTarget helper method
       const distance = world.getDistanceToTarget(enemy.x, enemy.y);
 
-      console.log({
-        distance,
-        range: world.self.range,
-      });
-
       // Keep optimal distance
       if (distance > world.self.range * 0.8) {
         action.moveDirection = world.directionTo(enemy.x, enemy.y);
       } else if (distance < world.self.range * 0.3) {
         // Move away from enemy using directionAwayFrom helper
-        action.moveDirection = world.directionAwayFrom(enemy.x, enemy.y);
+        // action.moveDirection = world.directionAwayFrom(enemy.x, enemy.y);
       } else {
-        console.log("other");
+        // action.moveDirection;
       }
 
       // Shoot if we can using shootAt helper
@@ -86,8 +115,6 @@ bots.push({
         action.shoot = world.shootAt(enemy.x, enemy.y);
       }
     }
-
-    // console.log(world, action);
 
     // =============================================================
     //                    RETURN YOUR ACTION

@@ -5,15 +5,14 @@ type Stat = {
   range: number; //   1-10: Shooting range multiplier
 };
 
-type Enemy = {
+export type Enemy = {
   x: number;
   y: number;
   hp: number;
   stats: Stat;
 };
 
-type Bullet = {
-  // Array of bullets
+export type Bullet = {
   x: number; //   Bullet X position
   y: number; //   Bullet Y position
   vx: number; //   Bullet X velocity
@@ -23,10 +22,13 @@ type Bullet = {
   traveledDistance: number; // Distance traveled so far
   life: number; //   Remaining bullet lifetime
   speed: number; //   Bullet speed
+  robotColor: string; // color of the robot
 };
 
+/**
+ * Arena boundaries
+ */
 type Map = {
-  // Arena boundaries
   width: number; //   Arena width
   height: number; //   Arena height
   x: number; //   Arena left edge
